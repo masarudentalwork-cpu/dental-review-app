@@ -1,26 +1,151 @@
+// レート制限用のMap（本番環境ではRedisなどを使うことを推奨）
+const rateLimitMap = new Map();
+
+// レート制限の設定
+const RATE_LIMIT = {
+  maxRequests: 10, // 1時間あたりの最大リクエスト数
+  windowMs: 60 * 60 * 1000, // 1時間（ミリ秒）
+};
+
+// IPアドレスからレート制限をチェック
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const userLimit = rateLimitMap.get(ip) || { count: 0, resetTime: now + RATE_LIMIT.windowMs };
+
+  // 時間窓がリセットされた場合
+  if (now > userLimit.resetTime) {
+    userLimit.count = 0;
+    userLimit.resetTime = now + RATE_LIMIT.windowMs;
+  }
+
+  // リクエスト数が上限を超えている場合
+  if (userLimit.count >= RATE_LIMIT.maxRequests) {
+    return false;
+  }
+
+  // リクエスト数を増やす
+  userLimit.count++;
+  rateLimitMap.set(ip, userLimit);
+
+  return true;
+}
+
+// 入力検証
+function validatePrompt(prompt) {
+  if (!prompt || typeof prompt !== 'string') {
+    return { valid: false, error: 'promptは文字列である必要があります' };
+  }
+
+  // 長さチェック（最大5000文字）
+  if (prompt.length > 5000) {
+    return { valid: false, error: 'promptが長すぎます（最大5000文字）' };
+  }
+
+  // 最小長チェック
+  if (prompt.length < 10) {
+    return { valid: false, error: 'promptが短すぎます（最小10文字）' };
+  }
+
+  // 危険な文字列のチェック（基本的なインジェクション対策）
+  const dangerousPatterns = [
+    /<script/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /eval\(/i,
+    /expression\(/i,
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(prompt)) {
+      return { valid: false, error: '無効な文字列が含まれています' };
+    }
+  }
+
+  return { valid: true };
+}
+
+// エラーメッセージのサニタイズ（詳細情報を隠す）
+function sanitizeError(error, isProduction = process.env.NODE_ENV === 'production') {
+  if (isProduction) {
+    // 本番環境では詳細なエラー情報を返さない
+    return {
+      error: '口コミの生成に失敗しました。しばらく時間をおいて再度お試しください。',
+    };
+  }
+  // 開発環境では詳細情報を返す
+  return {
+    error: '口コミの生成に失敗しました',
+    details: error.message,
+  };
+}
+
 export async function POST(request) {
   try {
-    const { prompt } = await request.json();
+    // CORS設定
+    const origin = request.headers.get('origin');
+    const allowedOrigins = [
+      process.env.NEXT_PUBLIC_APP_URL,
+      'http://localhost:3000',
+      'https://localhost:3000',
+    ].filter(Boolean);
 
-    const apiKey = process.env.GOOGLE_API_KEY;
-
-    if (!apiKey) {
+    // リクエストサイズの制限（10KB）
+    const contentLength = request.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > 10 * 1024) {
       return Response.json(
-        { error: 'Google APIキーが設定されていません' },
-        { status: 500 }
+        { error: 'リクエストサイズが大きすぎます' },
+        { status: 413 }
       );
     }
 
-    if (!prompt) {
+    // レート制限チェック
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown';
+    
+    if (!checkRateLimit(ip)) {
       return Response.json(
-        { error: 'promptが必要です' },
+        { error: 'リクエストが多すぎます。しばらく時間をおいて再度お試しください。' },
+        { status: 429 }
+      );
+    }
+
+    // リクエストボディの取得
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return Response.json(
+        { error: '無効なJSON形式です' },
         { status: 400 }
       );
     }
 
-    console.log('=== Gemini 2.5 Flash API呼び出し開始 ===');
+    const { prompt } = body;
 
-    // 正しいモデル名: gemini-2.5-flash
+    // APIキーの確認
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      console.error('Google APIキーが設定されていません');
+      return Response.json(
+        { error: 'サーバー設定エラーが発生しました' },
+        { status: 500 }
+      );
+    }
+
+    // 入力検証
+    const validation = validatePrompt(prompt);
+    if (!validation.valid) {
+      return Response.json(
+        { error: validation.error },
+        { status: 400 }
+      );
+    }
+
+    // Gemini API呼び出し
+    console.log('=== Gemini 2.5 Flash API呼び出し開始 ===');
+    console.log(`IP: ${ip}, Prompt length: ${prompt.length}`);
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
@@ -41,36 +166,152 @@ export async function POST(request) {
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 1200,
-          }
-        })
+          },
+          safetySettings: [
+            {
+              category: 'HARM_CATEGORY_HARASSMENT',
+              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+            },
+            {
+              category: 'HARM_CATEGORY_HATE_SPEECH',
+              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+            },
+            {
+              category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+            },
+            {
+              category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+            }
+          ]
+        }),
+        // タイムアウト設定（30秒）
+        signal: AbortSignal.timeout(30000)
       }
     );
 
     console.log('Gemini APIレスポンス:', response.status);
 
     if (!response.ok) {
-      const errorData = await response.json();
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { message: 'Unknown error' };
+      }
+
       console.error('Gemini API Error:', errorData);
+
+      // エラーの種類に応じて適切なレスポンスを返す
+      if (response.status === 429) {
+        return Response.json(
+          { error: 'APIの利用制限に達しました。しばらく時間をおいて再度お試しください。' },
+          { status: 429 }
+        );
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        console.error('API認証エラー - APIキーを確認してください');
+        return Response.json(
+          { error: '認証エラーが発生しました' },
+          { status: 500 }
+        );
+      }
+
+      // その他のエラー
+      const sanitizedError = sanitizeError(
+        new Error(errorData.message || 'API呼び出しエラー'),
+        true
+      );
       return Response.json(
-        { error: 'Gemini APIエラー', details: errorData },
-        { status: response.status }
+        sanitizedError,
+        { status: response.status >= 500 ? 500 : response.status }
       );
     }
 
     const data = await response.json();
     
+    // レスポンスの検証
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      console.error('無効なAPIレスポンス:', data);
+      return Response.json(
+        { error: 'APIからの応答が無効です' },
+        { status: 500 }
+      );
+    }
+
     // Geminiのレスポンス構造から口コミテキストを取得
     const reviewText = data.candidates[0].content.parts[0].text;
 
-    console.log('生成成功:', reviewText.substring(0, 50) + '...');
+    // 出力の検証
+    if (!reviewText || typeof reviewText !== 'string') {
+      console.error('無効なレビューテキスト:', reviewText);
+      return Response.json(
+        { error: '口コミの生成に失敗しました' },
+        { status: 500 }
+      );
+    }
 
-    return Response.json({ review: reviewText });
+    // 出力の長さチェック（最大5000文字）
+    const sanitizedReview = reviewText.length > 5000 
+      ? reviewText.substring(0, 5000) 
+      : reviewText;
+
+    console.log('生成成功:', sanitizedReview.substring(0, 50) + '...');
+
+    // CORSヘッダーを設定
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    if (origin && allowedOrigins.includes(origin)) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Methods'] = 'POST';
+      headers['Access-Control-Allow-Headers'] = 'Content-Type';
+    }
+
+    return Response.json(
+      { review: sanitizedReview },
+      { headers }
+    );
 
   } catch (error) {
+    // タイムアウトエラーの処理
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      console.error('API呼び出しタイムアウト');
+      return Response.json(
+        { error: 'リクエストがタイムアウトしました。しばらく時間をおいて再度お試しください。' },
+        { status: 504 }
+      );
+    }
+
     console.error('Server Error:', error);
+    const sanitizedError = sanitizeError(error, true);
     return Response.json(
-      { error: '口コミの生成に失敗しました', details: error.message },
+      sanitizedError,
       { status: 500 }
     );
   }
+}
+
+// OPTIONSリクエストの処理（CORS preflight）
+export async function OPTIONS(request) {
+  const origin = request.headers.get('origin');
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    'http://localhost:3000',
+    'https://localhost:3000',
+  ].filter(Boolean);
+
+  const headers = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
+  if (origin && allowedOrigins.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+
+  return new Response(null, { headers });
 }

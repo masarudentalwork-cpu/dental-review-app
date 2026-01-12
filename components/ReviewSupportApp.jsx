@@ -18,17 +18,63 @@ const ReviewSupportApp = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedReview, setEditedReview] = useState('');
+  
+  // 分岐用の状態
+  const [selectedChildTreatment, setSelectedChildTreatment] = useState('');
+  const [implantCount, setImplantCount] = useState('');
+  const [webBookingUsability, setWebBookingUsability] = useState('');
 
+  // Step1の診療内容（順序変更・追加）
   const treatments = [
-    { id: 'cavity', label: '虫歯治療', icon: '🦷' },
-    { id: 'periodontal', label: '歯周病治療', icon: '🩺' },
-    { id: 'cleaning', label: 'クリーニング・予防歯科', icon: '✨' },
-    { id: 'root_canal', label: '根管治療', icon: '🔬' },
-    { id: 'orthodontics', label: '矯正歯科', icon: '🦷' },
-    { id: 'implant', label: 'インプラント', icon: '⚙️' },
-    { id: 'whitening', label: 'ホワイトニング', icon: '💎' },
-    { id: 'extraction', label: '抜歯', icon: '🦷' },
-    { id: 'other', label: 'その他', icon: '💬' }
+    { id: 'cavity', label: '虫歯治療' },
+    { id: 'root_canal', label: '根管治療' },
+    { id: 'periodontal', label: '歯周病治療' },
+    { id: 'cleaning', label: 'クリーニング・予防歯科' },
+    { id: 'ceramic', label: 'セラミック治療' },
+    { id: 'pediatric', label: '小児歯科' },
+    { id: 'orthodontics', label: '矯正歯科' },
+    { id: 'implant', label: 'インプラント' },
+    { id: 'whitening', label: 'ホワイトニング' },
+    { id: 'denture', label: '入れ歯' },
+    { id: 'tmj', label: 'かみ合わせ・顎関節症' },
+    { id: 'wisdom_tooth', label: '親知らずの抜歯' },
+    { id: 'other', label: 'その他' }
+  ];
+
+  // 小児歯科の分岐
+  const pediatricOptions = [
+    { id: 'pediatric_cavity', label: 'むし歯' },
+    { id: 'pediatric_prevention', label: '予防' },
+    { id: 'pediatric_ortho', label: '小児矯正' }
+  ];
+
+  // 小児矯正の分岐
+  const pediatricOrthoOptions = [
+    { id: 'pediatric_ortho_wire', label: 'ワイヤー矯正' },
+    { id: 'pediatric_ortho_inside', label: '裏側矯正' },
+    { id: 'pediatric_ortho_mouthpiece', label: 'マウスピース矯正' }
+  ];
+
+  // 矯正歯科の分岐
+  const orthodonticsOptions = [
+    { id: 'ortho_wire', label: 'ワイヤー矯正' },
+    { id: 'ortho_inside', label: '裏側矯正' },
+    { id: 'ortho_mouthpiece', label: 'マウスピース矯正' }
+  ];
+
+  // ホワイトニングの分岐
+  const whiteningOptions = [
+    { id: 'whitening_home', label: '自宅で' },
+    { id: 'whitening_clinic', label: '歯医者で' }
+  ];
+
+  // インプラント本数
+  const implantCounts = [
+    { id: '1', label: '1本' },
+    { id: '2', label: '2本' },
+    { id: '3', label: '3本' },
+    { id: '4', label: '4本' },
+    { id: '5plus', label: '5本以上' }
   ];
 
   const treatmentItems = [
@@ -47,10 +93,10 @@ const ReviewSupportApp = () => {
     '治療計画を明確に示してくれた'
   ];
 
+  // Step4のスタッフ項目変更
   const staffItems = [
-    { id: 'doctor', label: '医師の対応' },
-    { id: 'hygienist', label: '歯科衛生士の対応' },
-    { id: 'reception', label: '受付スタッフの対応' }
+    { id: 'treating_staff', label: '治療を担当したスタッフの対応' },
+    { id: 'reception', label: '受付の対応' }
   ];
 
   const staffDetailOptions = [
@@ -78,6 +124,7 @@ const ReviewSupportApp = () => {
     'バリアフリーで安心'
   ];
 
+  // Step5の変更
   const bookingOptions = {
     ease: [
       { id: 'easy', label: '希望日時で予約できた' },
@@ -85,26 +132,60 @@ const ReviewSupportApp = () => {
       { id: 'difficult', label: '予約が取りにくかった' }
     ],
     waitTime: [
-      { id: 'under15', label: '15分以内' },
-      { id: 'under30', label: '15〜30分' },
-      { id: 'under60', label: '30分〜1時間' },
+      { id: '15min', label: '15分以内' },
+      { id: '30min', label: '15〜30分' },
+      { id: '60min', label: '30分〜1時間' },
       { id: 'over60', label: '1時間以上' }
     ],
     webBooking: [
-      { id: 'yes', label: 'WEB予約が便利だった' },
+      { id: 'yes', label: 'WEB予約があって便利だった' },
       { id: 'no', label: '電話予約のみだった' }
+    ],
+    webBookingUsability: [
+      { id: 'easy', label: '使いやすかった' },
+      { id: 'hard', label: '使いづらかった' }
     ]
   };
 
   const gmbPlaceId = process.env.NEXT_PUBLIC_GMB_PLACE_ID;
   const gmbReviewUrl = gmbPlaceId
     ? `https://search.google.com/local/writereview?placeid=${gmbPlaceId}`
-    // 環境変数が未設定の場合は検索結果にフォールバック（あおやま歯科・武蔵境）
     : 'https://www.google.com/maps/search/?api=1&query=%E3%81%82%E3%81%8A%E3%82%84%E3%81%BE%E6%AD%AF%E7%A7%91%E3%83%BB%E6%AD%A6%E8%94%B5%E5%A2%83';
 
   const toggleTreatment = (treatmentId) => {
-    // 単一選択に変更し、選択後すぐ次のステップへ進む
     setSelectedTreatments([treatmentId]);
+    
+    // 分岐が必要な診療内容の場合、中間ステップを表示
+    if (treatmentId === 'pediatric') {
+      setStep(1.5); // 小児歯科の分岐
+    } else if (treatmentId === 'orthodontics') {
+      setStep(1.6); // 矯正歯科の分岐
+    } else if (treatmentId === 'implant') {
+      setStep(1.7); // インプラント本数選択
+    } else if (treatmentId === 'whitening') {
+      setStep(1.8); // ホワイトニングの分岐
+    } else {
+      setStep(2); // 通常はStep2へ
+    }
+  };
+
+  const handleChildTreatment = (optionId) => {
+    setSelectedChildTreatment(optionId);
+    setStep(2);
+  };
+
+  const handleOrthodontics = (optionId) => {
+    setSelectedChildTreatment(optionId);
+    setStep(2);
+  };
+
+  const handleImplantCount = (countId) => {
+    setImplantCount(countId);
+    setStep(2);
+  };
+
+  const handleWhitening = (optionId) => {
+    setSelectedChildTreatment(optionId);
     setStep(2);
   };
 
@@ -136,17 +217,46 @@ const ReviewSupportApp = () => {
 
   const setBookingOption = (category, value) => {
     setBookingInfo(prev => ({ ...prev, [category]: value }));
+    
+    // WEB予約を選んだ場合、使いやすさの選択を表示
+    if (category === 'webBooking' && value === 'yes') {
+      // Step5の続きで表示される
+    }
   };
 
   const buildPrompt = () => {
     let prompt = '以下の情報をもとに、自然で具体的な歯科医院の口コミレビューを250-350字程度で作成してください。\n\n';
 
+    // 診療内容の構築
     if (selectedTreatments.length > 0) {
       prompt += '【受けた診療】\n';
-      selectedTreatments.forEach(id => {
-        const treatment = treatments.find(t => t.id === id);
-        prompt += `- ${treatment.label}\n`;
-      });
+      const mainTreatment = treatments.find(t => t.id === selectedTreatments[0]);
+      if (mainTreatment) {
+        prompt += `- ${mainTreatment.label}\n`;
+        
+        // 分岐内容を追加
+        if (selectedTreatments[0] === 'pediatric' && selectedChildTreatment) {
+          const pediatricOption = pediatricOptions.find(o => o.id === selectedChildTreatment);
+          if (pediatricOption) {
+            prompt += `  - ${pediatricOption.label}\n`;
+          }
+        } else if (selectedTreatments[0] === 'orthodontics' && selectedChildTreatment) {
+          const orthoOption = orthodonticsOptions.find(o => o.id === selectedChildTreatment);
+          if (orthoOption) {
+            prompt += `  - ${orthoOption.label}\n`;
+          }
+        } else if (selectedTreatments[0] === 'implant' && implantCount) {
+          const countOption = implantCounts.find(o => o.id === implantCount);
+          if (countOption) {
+            prompt += `  - ${countOption.label}\n`;
+          }
+        } else if (selectedTreatments[0] === 'whitening' && selectedChildTreatment) {
+          const whiteningOption = whiteningOptions.find(o => o.id === selectedChildTreatment);
+          if (whiteningOption) {
+            prompt += `  - ${whiteningOption.label}\n`;
+          }
+        }
+      }
       prompt += '\n';
     }
 
@@ -205,6 +315,12 @@ const ReviewSupportApp = () => {
       if (bookingInfo.webBooking) {
         const webOption = bookingOptions.webBooking.find(o => o.id === bookingInfo.webBooking);
         prompt += `- ${webOption.label}\n`;
+        if (bookingInfo.webBooking === 'yes' && webBookingUsability) {
+          const usabilityOption = bookingOptions.webBookingUsability.find(o => o.id === webBookingUsability);
+          if (usabilityOption) {
+            prompt += `  - ${usabilityOption.label}\n`;
+          }
+        }
       }
       prompt += '\n';
     }
@@ -252,14 +368,23 @@ const ReviewSupportApp = () => {
 
   const handleNext = () => {
     if (step === 1 && selectedTreatments.length === 0) {
-      alert('診療内容を少なくとも1つ選択してください');
+      alert('診療内容を選択してください');
       return;
     }
     if (step === 7) {
       generateReview();
       return;
     }
+    if (step === 5 && bookingInfo.webBooking === 'yes' && !webBookingUsability) {
+      // WEB予約を選んだ場合、使いやすさの選択が必要
+      return;
+    }
     setStep(step + 1);
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    alert('口コミをクリップボードにコピーしました！');
   };
 
   const StarRating = ({ value, onChange }) => (
@@ -273,11 +398,13 @@ const ReviewSupportApp = () => {
   );
 
   const ProgressBar = () => {
-    const progress = (step / 9) * 100;
+    const totalSteps = 9;
+    const currentStep = Math.floor(step);
+    const progress = (currentStep / totalSteps) * 100;
     return (
       <div className="mb-8">
         <div className="flex justify-between text-sm text-gray-600 mb-2">
-          <span>ステップ {step} / 9</span>
+          <span>ステップ {currentStep} / {totalSteps}</span>
           <span>{Math.round(progress)}%</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
@@ -295,6 +422,7 @@ const ReviewSupportApp = () => {
           <p className="text-gray-600 text-center mb-8">いくつかの質問に答えるだけで、素敵な口コミが完成します</p>
           <ProgressBar />
 
+          {/* Step 1: 診療内容選択 */}
           {step === 1 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">どの診療を受けましたか？</h2>
@@ -318,11 +446,86 @@ const ReviewSupportApp = () => {
             </div>
           )}
 
+          {/* Step 1.5: 小児歯科の分岐 */}
+          {step === 1.5 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">どの治療を受けましたか？</h2>
+              <div className="space-y-3">
+                {pediatricOptions.map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => handleChildTreatment(option.id)}
+                    className="w-full p-4 rounded-lg border-2 border-sky-200 bg-sky-400 text-white hover:bg-sky-500 hover:border-sky-500 transition-all text-left"
+                  >
+                    <span className="font-medium">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 1.6: 矯正歯科の分岐 */}
+          {step === 1.6 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">どの矯正を受けましたか？</h2>
+              <div className="space-y-3">
+                {orthodonticsOptions.map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => handleOrthodontics(option.id)}
+                    className="w-full p-4 rounded-lg border-2 border-sky-200 bg-sky-400 text-white hover:bg-sky-500 hover:border-sky-500 transition-all text-left"
+                  >
+                    <span className="font-medium">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 1.7: インプラント本数選択 */}
+          {step === 1.7 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">インプラントは何本ですか？</h2>
+              <div className="space-y-3">
+                {implantCounts.map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => handleImplantCount(option.id)}
+                    className="w-full p-4 rounded-lg border-2 border-sky-200 bg-sky-400 text-white hover:bg-sky-500 hover:border-sky-500 transition-all text-left"
+                  >
+                    <span className="font-medium">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 1.8: ホワイトニングの分岐 */}
+          {step === 1.8 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">ホワイトニングはどこで受けましたか？</h2>
+              <div className="space-y-3">
+                {whiteningOptions.map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => handleWhitening(option.id)}
+                    className="w-full p-4 rounded-lg border-2 border-sky-200 bg-sky-400 text-white hover:bg-sky-500 hover:border-sky-500 transition-all text-left"
+                  >
+                    <span className="font-medium">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: 治療についての評価（最初から特に良かった点を表示） */}
           {step === 2 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">治療についての評価</h2>
-              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">治療についての評価</h2>
               <div className="space-y-4">
                 {treatmentItems.map(item => (
                   <div key={item.id} className="bg-gray-50 p-4 rounded-lg">
@@ -331,44 +534,41 @@ const ReviewSupportApp = () => {
                   </div>
                 ))}
               </div>
-              {Object.values(treatmentRatings).some(v => v >= 4) && (
-                <div className="mt-6">
-                  <label className="block text-gray-700 font-medium mb-3">特に良かった点は？（複数選択可）</label>
-                  <div className="space-y-3">
-                    {treatmentDetailOptions.map(option => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => toggleDetail('treatment', option)}
-                        className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
-                          treatmentDetails.includes(option)
-                            ? 'border-sky-600 bg-sky-600 text-white shadow-sm'
-                            : 'border-sky-200 bg-sky-400 text-white hover:bg-sky-500 hover:border-sky-500'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                              treatmentDetails.includes(option) ? 'bg-white border-white' : 'border-white'
-                            }`}
-                          >
-                            {treatmentDetails.includes(option) && <Check size={16} className="text-sky-600" />}
-                          </div>
-                          <span>{option}</span>
+              <div className="mt-6">
+                <label className="block text-gray-700 font-medium mb-3">特に良かった点は？（複数選択可）</label>
+                <div className="space-y-3">
+                  {treatmentDetailOptions.map(option => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => toggleDetail('treatment', option)}
+                      className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                        treatmentDetails.includes(option)
+                          ? 'border-sky-600 bg-sky-600 text-white shadow-sm'
+                          : 'border-sky-200 bg-sky-400 text-white hover:bg-sky-500 hover:border-sky-500'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            treatmentDetails.includes(option) ? 'bg-white border-white' : 'border-white'
+                          }`}
+                        >
+                          {treatmentDetails.includes(option) && <Check size={16} className="text-sky-600" />}
                         </div>
-                      </button>
-                    ))}
-                  </div>
+                        <span>{option}</span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
           )}
 
+          {/* Step 3: スタッフの対応（変更：治療担当スタッフ、受付） */}
           {step === 3 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">スタッフの対応はどうでしたか？</h2>
-              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">スタッフの対応はどうでしたか？</h2>
               <div className="space-y-4">
                 {staffItems.map(item => (
                   <div key={item.id} className="bg-gray-50 p-4 rounded-lg">
@@ -410,11 +610,10 @@ const ReviewSupportApp = () => {
             </div>
           )}
 
+          {/* Step 4: 設備・環境 */}
           {step === 4 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">設備・環境はどうでしたか？</h2>
-              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">設備・環境はどうでしたか？</h2>
               <div className="space-y-4">
                 {facilityItems.map(item => (
                   <div key={item.id} className="bg-gray-50 p-4 rounded-lg">
@@ -456,11 +655,10 @@ const ReviewSupportApp = () => {
             </div>
           )}
 
+          {/* Step 5: 予約の取りやすさ */}
           {step === 5 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">予約の取りやすさはどうでしたか？</h2>
-              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">予約の取りやすさはどうでしたか？</h2>
               <div className="space-y-3">
                 {bookingOptions.ease.map(option => (
                   <button
@@ -489,11 +687,10 @@ const ReviewSupportApp = () => {
             </div>
           )}
 
+          {/* Step 6: 待ち時間とWEB予約 */}
           {step === 6 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">待ち時間はどれくらいでしたか？</h2>
-              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">待ち時間はどれくらいでしたか？</h2>
               <div className="space-y-3">
                 {bookingOptions.waitTime.map(option => (
                   <button
@@ -546,15 +743,44 @@ const ReviewSupportApp = () => {
                     </button>
                   ))}
                 </div>
+                {bookingInfo.webBooking === 'yes' && (
+                  <div className="mt-4">
+                    <label className="block text-gray-700 font-medium mb-3">WEB予約の使いやすさはどうでしたか？</label>
+                    <div className="space-y-3">
+                      {bookingOptions.webBookingUsability.map(option => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setWebBookingUsability(option.id)}
+                          className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                            webBookingUsability === option.id
+                              ? 'border-sky-600 bg-sky-600 text-white shadow-sm'
+                              : 'border-sky-200 bg-sky-400 text-white hover:bg-sky-500 hover:border-sky-500'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                webBookingUsability === option.id ? 'bg-white border-white' : 'border-white'
+                              }`}
+                            >
+                              {webBookingUsability === option.id && <div className="w-2.5 h-2.5 bg-sky-600 rounded-full" />}
+                            </div>
+                            <span className="font-medium">{option.label}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
+          {/* Step 7: その他の感想 */}
           {step === 7 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">その他に伝えたいことはありますか？（任意）</h2>
-              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">その他に伝えたいことはありますか？（任意）</h2>
               <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
                 <p className="text-sm text-gray-600 mb-3">ここまでの質問で伝えきれなかったこと、特に印象に残ったエピソード、先生やスタッフへの感謝の気持ちなど、自由に記入してください。</p>
                 <textarea value={freeText} onChange={(e) => setFreeText(e.target.value)}
@@ -569,6 +795,7 @@ const ReviewSupportApp = () => {
             </div>
           )}
 
+          {/* Step 8: 生成された口コミ（再生成をテキストリンクに変更） */}
           {step === 8 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">生成された口コミ</h2>
@@ -603,12 +830,14 @@ const ReviewSupportApp = () => {
                     >
                       <Edit size={20} /> 編集する
                     </button>
+                  </div>
+                  <div className="mt-3 text-center">
                     <button
                       onClick={generateReview}
                       disabled={isGenerating}
-                      className="flex-1 bg-sky-500 text-white py-3 rounded-lg font-medium hover:bg-sky-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="text-sm text-gray-600 hover:text-gray-800 underline disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <RefreshCw size={20} className={isGenerating ? 'animate-spin' : ''} /> 再生成
+                      {isGenerating ? '生成中...' : '再生成'}
                     </button>
                   </div>
                 </div>
@@ -616,31 +845,53 @@ const ReviewSupportApp = () => {
             </div>
           )}
 
+          {/* Step 9: 口コミ投稿（リード文変更、コピーボタンの色変更、クリックでコピー） */}
           {step === 9 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">口コミを投稿しましょう</h2>
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
+              <p className="text-gray-700 mb-4">以下の口コミをコピーして、Googleマップに投稿してください。</p>
+              <div 
+                className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6 cursor-pointer hover:bg-blue-100 transition-colors"
+                onClick={() => copyToClipboard(generatedReview)}
+              >
                 <p className="text-gray-700 leading-relaxed">{generatedReview}</p>
+                <p className="text-xs text-gray-500 mt-2">※クリックでコピーできます</p>
               </div>
-              <p className="text-gray-600 mb-4">以下の投稿先を選んで、口コミをコピーして投稿してください</p>
               <div className="space-y-3">
                 <a href={gmbReviewUrl} target="_blank" rel="noopener noreferrer"
                   className="block w-full p-4 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-all">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-medium">Google マップ</div>
+                      <div className="font-medium">Google口コミに投稿する</div>
                       <div className="text-sm opacity-90">Googleビジネスプロフィールに投稿</div>
                     </div>
                     <ChevronRight className="text-white opacity-90" />
                   </div>
                 </a>
-                <button onClick={() => { navigator.clipboard.writeText(generatedReview); alert('口コミをクリップボードにコピーしました！'); }}
-                  className="w-full p-4 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-all font-medium">
+                <button 
+                  onClick={() => copyToClipboard(generatedReview)}
+                  className="w-full p-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all font-medium"
+                >
                   📋 口コミをコピー
                 </button>
               </div>
               <div className="mt-8 text-center">
-                <button onClick={() => { setStep(1); setSelectedTreatments([]); setTreatmentRatings({}); setStaffRatings({}); setFacilityRatings({}); setBookingInfo({}); setTreatmentDetails([]); setStaffDetails([]); setFacilityDetails([]); setFreeText(''); setGeneratedReview(''); }}
+                <button onClick={() => { 
+                  setStep(1); 
+                  setSelectedTreatments([]); 
+                  setTreatmentRatings({}); 
+                  setStaffRatings({}); 
+                  setFacilityRatings({}); 
+                  setBookingInfo({}); 
+                  setTreatmentDetails([]); 
+                  setStaffDetails([]); 
+                  setFacilityDetails([]); 
+                  setFreeText(''); 
+                  setGeneratedReview(''); 
+                  setSelectedChildTreatment('');
+                  setImplantCount('');
+                  setWebBookingUsability('');
+                }}
                   className="text-blue-500 hover:text-blue-600 font-medium">
                   最初からやり直す
                 </button>
@@ -648,18 +899,34 @@ const ReviewSupportApp = () => {
             </div>
           )}
 
-          {step < 9 && (
+          {/* ナビゲーションボタン */}
+          {step < 9 && step >= 1 && (
             <div className="flex gap-4 mt-8">
-              {step > 1 && (
-                <button onClick={() => setStep(step - 1)} disabled={isGenerating}
+              {step > 1 && step !== 1.5 && step !== 1.6 && step !== 1.7 && step !== 1.8 && (
+                <button onClick={() => {
+                  if (step === 2) {
+                    // Step2から戻る場合、Step1に戻る
+                    setStep(1);
+                  } else {
+                    setStep(step - 1);
+                  }
+                }} disabled={isGenerating}
                   className="flex items-center gap-2 px-6 py-3 bg-sky-400 text-white rounded-lg font-medium hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   <ChevronLeft size={20} /> 戻る
                 </button>
               )}
-              <button onClick={handleNext} disabled={isGenerating || (step === 1 && selectedTreatments.length === 0)}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-sky-500 text-white rounded-lg font-medium hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                {isGenerating ? (<><RefreshCw size={20} className="animate-spin" /> 生成中...</>) : (<>{step === 7 ? '口コミを生成' : '次へ'} {step < 7 && <ChevronRight size={20} />}</>)}
-              </button>
+              {(step === 1.5 || step === 1.6 || step === 1.7 || step === 1.8) && (
+                <button onClick={() => setStep(1)} disabled={isGenerating}
+                  className="flex items-center gap-2 px-6 py-3 bg-sky-400 text-white rounded-lg font-medium hover:bg-sky-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  <ChevronLeft size={20} /> 戻る
+                </button>
+              )}
+              {step !== 1.5 && step !== 1.6 && step !== 1.7 && step !== 1.8 && (
+                <button onClick={handleNext} disabled={isGenerating || (step === 1 && selectedTreatments.length === 0) || (step === 6 && bookingInfo.webBooking === 'yes' && !webBookingUsability)}
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-sky-500 text-white rounded-lg font-medium hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isGenerating ? (<><RefreshCw size={20} className="animate-spin" /> 生成中...</>) : (<>{step === 7 ? '口コミを生成' : '次へ'} {step < 7 && <ChevronRight size={20} />}</>)}
+                </button>
+              )}
             </div>
           )}
         </div>
