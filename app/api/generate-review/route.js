@@ -186,8 +186,8 @@ export async function POST(request) {
             }
           ]
         }),
-        // タイムアウト設定（30秒）
-        signal: AbortSignal.timeout(30000)
+        // タイムアウト設定（25秒 - Vercelの無料プランは10秒だが、Hobbyプランは60秒）
+        signal: AbortSignal.timeout(25000)
       }
     );
 
@@ -230,23 +230,51 @@ export async function POST(request) {
       );
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      console.error('JSON解析エラー:', error);
+      return Response.json(
+        { error: 'APIからの応答の解析に失敗しました' },
+        { status: 500 }
+      );
+    }
     
     // レスポンスの検証
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-      console.error('無効なAPIレスポンス:', data);
+    if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+      console.error('無効なAPIレスポンス構造:', JSON.stringify(data, null, 2));
       return Response.json(
         { error: 'APIからの応答が無効です' },
         { status: 500 }
       );
     }
 
+    const candidate = data.candidates[0];
+    if (!candidate || !candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts)) {
+      console.error('無効なcandidate構造:', JSON.stringify(candidate, null, 2));
+      return Response.json(
+        { error: 'APIからの応答が無効です' },
+        { status: 500 }
+      );
+    }
+
+    // 安全性チェック（ブロックされた場合）
+    if (candidate.finishReason === 'SAFETY') {
+      console.error('安全性フィルターによりブロックされました');
+      return Response.json(
+        { error: '生成された内容が安全性フィルターによりブロックされました。別の内容でお試しください。' },
+        { status: 400 }
+      );
+    }
+
     // Geminiのレスポンス構造から口コミテキストを取得
-    const reviewText = data.candidates[0].content.parts[0].text;
+    const reviewText = candidate.content.parts[0]?.text;
 
     // 出力の検証
     if (!reviewText || typeof reviewText !== 'string') {
       console.error('無効なレビューテキスト:', reviewText);
+      console.error('レスポンス全体:', JSON.stringify(data, null, 2));
       return Response.json(
         { error: '口コミの生成に失敗しました' },
         { status: 500 }
@@ -279,17 +307,37 @@ export async function POST(request) {
   } catch (error) {
     // タイムアウトエラーの処理
     if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-      console.error('API呼び出しタイムアウト');
+      console.error('API呼び出しタイムアウト:', error);
       return Response.json(
         { error: 'リクエストがタイムアウトしました。しばらく時間をおいて再度お試しください。' },
         { status: 504 }
       );
     }
 
-    console.error('Server Error:', error);
-    const sanitizedError = sanitizeError(error, true);
+    // 詳細なエラーログ（本番環境でも記録）
+    console.error('Server Error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    });
+    
+    // 開発環境では詳細なエラーを返す
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (!isProduction) {
+      return Response.json(
+        { 
+          error: '口コミの生成に失敗しました',
+          details: error.message,
+          stack: error.stack
+        },
+        { status: 500 }
+      );
+    }
+    
+    // 本番環境では汎用的なエラーメッセージ
     return Response.json(
-      sanitizedError,
+      { error: '口コミの生成に失敗しました。しばらく時間をおいて再度お試しください。' },
       { status: 500 }
     );
   }
