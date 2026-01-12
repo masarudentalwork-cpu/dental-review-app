@@ -171,7 +171,7 @@ export async function POST(request) {
             ],
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 1200,
+              maxOutputTokens: 2048, // 250-350字の口コミ生成に十分なトークン数
             },
             safetySettings: [
               {
@@ -285,8 +285,21 @@ export async function POST(request) {
       );
     }
 
+    // トークン制限に達した場合の警告
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      console.warn('トークン制限に達しました。文章が途中で切れている可能性があります。');
+      // 警告は出すが、生成された内容は返す
+    }
+
     // Geminiのレスポンス構造から口コミテキストを取得
-    const reviewText = candidate.content.parts[0]?.text;
+    let reviewText = candidate.content.parts[0]?.text;
+    
+    // finishReasonがMAX_TOKENSの場合、文章が途中で切れている可能性があるため警告を追加
+    if (candidate.finishReason === 'MAX_TOKENS' && reviewText) {
+      // 文章が途中で切れている可能性があることを示す（必要に応じて）
+      // ただし、実際にはmaxOutputTokensを増やしたので、この問題は発生しにくくなります
+      console.warn('生成された文章がトークン制限により途中で切れている可能性があります');
+    }
 
     // 出力の検証
     if (!reviewText || typeof reviewText !== 'string') {
