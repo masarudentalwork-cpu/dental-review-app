@@ -146,50 +146,67 @@ export async function POST(request) {
     console.log('=== Gemini 2.5 Flash API呼び出し開始 ===');
     console.log(`IP: ${ip}, Prompt length: ${prompt.length}`);
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1200,
+    // タイムアウト用のAbortController（Vercel無料プランは10秒制限のため8秒に設定）
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    let response;
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          safetySettings: [
-            {
-              category: 'HARM_CATEGORY_HARASSMENT',
-              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 1200,
             },
-            {
-              category: 'HARM_CATEGORY_HATE_SPEECH',
-              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
-            },
-            {
-              category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
-            },
-            {
-              category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-              threshold: 'BLOCK_MEDIUM_AND_ABOVE'
-            }
-          ]
-        }),
-        // タイムアウト設定（25秒 - Vercelの無料プランは10秒だが、Hobbyプランは60秒）
-        signal: AbortSignal.timeout(25000)
+            safetySettings: [
+              {
+                category: 'HARM_CATEGORY_HARASSMENT',
+                threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+              },
+              {
+                category: 'HARM_CATEGORY_HATE_SPEECH',
+                threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+              },
+              {
+                category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+              },
+              {
+                category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+                threshold: 'BLOCK_MEDIUM_AND_ABOVE'
+              }
+            ]
+          }),
+          signal: controller.signal
+        }
+      );
+      clearTimeout(timeoutId);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error('API呼び出しタイムアウト（8秒）');
+        return Response.json(
+          { error: 'リクエストがタイムアウトしました。しばらく時間をおいて再度お試しください。' },
+          { status: 504 }
+        );
       }
-    );
+      throw fetchError;
+    }
 
     console.log('Gemini APIレスポンス:', response.status);
 
@@ -321,6 +338,15 @@ export async function POST(request) {
       stack: error.stack,
       cause: error.cause
     });
+    
+    // エラーの種類に応じた処理
+    if (error.message && error.message.includes('API key')) {
+      console.error('APIキー関連のエラーが発生しました');
+      return Response.json(
+        { error: 'API設定エラーが発生しました。管理者にお問い合わせください。' },
+        { status: 500 }
+      );
+    }
     
     // 開発環境では詳細なエラーを返す
     const isProduction = process.env.NODE_ENV === 'production';
