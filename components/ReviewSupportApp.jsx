@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, Edit, RefreshCw, Check, Star } from 'lucide-react';
 
 const ReviewSupportApp = () => {
@@ -23,6 +23,51 @@ const ReviewSupportApp = () => {
   const [selectedChildTreatment, setSelectedChildTreatment] = useState('');
   const [implantCount, setImplantCount] = useState('');
   const [webBookingUsability, setWebBookingUsability] = useState('');
+
+  // 医院設定の状態
+  const [clinicConfig, setClinicConfig] = useState(null);
+  const [gmbReviewUrl, setGmbReviewUrl] = useState('');
+
+  // URLパラメータから医院IDを取得、または環境変数からデフォルト値を取得
+  useEffect(() => {
+    const getClinicId = () => {
+      // クライアントサイドでURLパラメータを取得
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('clinicId') || params.get('c') || null;
+      }
+      return null;
+    };
+
+    const clinicId = getClinicId();
+    
+    // 医院設定を取得
+    const fetchClinicConfig = async () => {
+      try {
+        const response = await fetch(`/api/clinic-config?clinicId=${clinicId || 'default'}`);
+        if (response.ok) {
+          const config = await response.json();
+          setClinicConfig(config);
+          setGmbReviewUrl(config.gmbReviewUrl);
+        } else {
+          // フォールバック: 環境変数から取得
+          const defaultPlaceId = process.env.NEXT_PUBLIC_GMB_PLACE_ID;
+          if (defaultPlaceId) {
+            setGmbReviewUrl(`https://search.google.com/local/writereview?placeid=${defaultPlaceId}`);
+          }
+        }
+      } catch (error) {
+        console.error('医院設定の取得エラー:', error);
+        // フォールバック: 環境変数から取得
+        const defaultPlaceId = process.env.NEXT_PUBLIC_GMB_PLACE_ID;
+        if (defaultPlaceId) {
+          setGmbReviewUrl(`https://search.google.com/local/writereview?placeid=${defaultPlaceId}`);
+        }
+      }
+    };
+
+    fetchClinicConfig();
+  }, []);
 
   // Step1の診療内容（順序変更・追加）
   const treatments = [
@@ -147,10 +192,7 @@ const ReviewSupportApp = () => {
     ]
   };
 
-  const gmbPlaceId = process.env.NEXT_PUBLIC_GMB_PLACE_ID;
-  const gmbReviewUrl = gmbPlaceId
-    ? `https://search.google.com/local/writereview?placeid=${gmbPlaceId}`
-    : 'https://www.google.com/maps/search/?api=1&query=%E3%81%82%E3%81%8A%E3%82%84%E3%81%BE%E6%AD%AF%E7%A7%91%E3%83%BB%E6%AD%A6%E8%94%B5%E5%A2%83';
+  // gmbReviewUrlはuseEffectで設定される
 
   const toggleTreatment = (treatmentId) => {
     setSelectedTreatments([treatmentId]);
@@ -860,8 +902,12 @@ const ReviewSupportApp = () => {
                 <p className="text-xs text-gray-500 mt-2">※クリックでコピーできます</p>
               </div>
               <div className="space-y-3">
-                <a href={gmbReviewUrl} target="_blank" rel="noopener noreferrer"
-                  className="block w-full p-4 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-all">
+                <a 
+                  href={gmbReviewUrl || 'https://www.google.com/maps'} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="block w-full p-4 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-all"
+                >
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium">Google口コミに投稿する</div>
