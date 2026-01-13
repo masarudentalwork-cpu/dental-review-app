@@ -28,10 +28,9 @@ const clinicConfigs = {
   // },
 };
 
-export async function GET(request) {
+export async function GET(request, { params }) {
   try {
-    const { searchParams } = new URL(request.url);
-    const clinicId = searchParams.get('clinicId') || 'default';
+    const { clinicId } = await params;
 
     // 医院設定を取得
     const config = clinicConfigs[clinicId] || clinicConfigs.default;

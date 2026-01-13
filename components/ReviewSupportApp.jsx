@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, Edit, RefreshCw, Check, Star } from 'lucide-react';
 
-const ReviewSupportApp = () => {
+const ReviewSupportApp = ({ clinicId: propClinicId }) => {
   const [step, setStep] = useState(1);
   const [selectedTreatments, setSelectedTreatments] = useState([]);
   const [treatmentRatings, setTreatmentRatings] = useState({});
@@ -28,14 +28,29 @@ const ReviewSupportApp = () => {
   const [clinicConfig, setClinicConfig] = useState(null);
   const [gmbReviewUrl, setGmbReviewUrl] = useState('');
 
-  // URLパラメータから医院IDを取得、または環境変数からデフォルト値を取得
+  // 医院IDを取得（props、URLパス、URLパラメータの順で確認）
   useEffect(() => {
     const getClinicId = () => {
-      // クライアントサイドでURLパラメータを取得
+      // 1. propsから取得（URLパスベースの場合）
+      if (propClinicId) {
+        return propClinicId;
+      }
+      
+      // 2. URLパスから取得（/clinic/[clinicId]/ の場合）
+      if (typeof window !== 'undefined') {
+        const pathname = window.location.pathname;
+        const clinicMatch = pathname.match(/\/clinic\/([^\/]+)/);
+        if (clinicMatch) {
+          return clinicMatch[1];
+        }
+      }
+      
+      // 3. URLパラメータから取得（後方互換性のため）
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         return params.get('clinicId') || params.get('c') || null;
       }
+      
       return null;
     };
 
@@ -44,7 +59,11 @@ const ReviewSupportApp = () => {
     // 医院設定を取得
     const fetchClinicConfig = async () => {
       try {
-        const response = await fetch(`/api/clinic-config?clinicId=${clinicId || 'default'}`);
+        const apiPath = clinicId 
+          ? `/api/clinic/${clinicId}/config`
+          : '/api/clinic-config?clinicId=default';
+        
+        const response = await fetch(apiPath);
         if (response.ok) {
           const config = await response.json();
           setClinicConfig(config);
@@ -67,7 +86,7 @@ const ReviewSupportApp = () => {
     };
 
     fetchClinicConfig();
-  }, []);
+  }, [propClinicId]);
 
   // Step1の診療内容（順序変更・追加）
   const treatments = [
