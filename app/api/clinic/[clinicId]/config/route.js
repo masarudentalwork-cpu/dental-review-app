@@ -12,6 +12,14 @@ const clinicConfigs = {
     placeId: process.env.NEXT_PUBLIC_AOYAMA_PLACE_ID || process.env.NEXT_PUBLIC_GMB_PLACE_ID || '',
     name: 'あおやま歯科・武蔵境',
   },
+  'futaba-shika': {
+    placeId: process.env.NEXT_PUBLIC_FUTABA_PLACE_ID || process.env.NEXT_PUBLIC_GMB_PLACE_ID || '',
+    name: 'ふたば歯科川崎院',
+  },
+  'olympic-dental': {
+    placeId: process.env.NEXT_PUBLIC_OLYMPIC_PLACE_ID || process.env.NEXT_PUBLIC_GMB_PLACE_ID || '',
+    name: 'ワイズ板橋歯科・おとなこども矯正歯科',
+  },
   // 他の医院を追加する場合は、以下の形式で追加してください
   // '医院ID（英数字、ハイフン可）': {
   //   placeId: process.env.NEXT_PUBLIC_[医院IDを大文字にした変数名]_PLACE_ID || '',
